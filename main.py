@@ -6,6 +6,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
 import statistics
+from sklearn.metrics import r2_score
+from sklearn.model_selection import RandomizedSearchCV
 
 def splitDataAndSave():
 
@@ -30,16 +32,57 @@ def splitDataAndSave():
 
 def getError(X_train, X_test, Y_train, Y_test):
 
-    rf = RandomForestRegressor(n_estimators = 98, oob_score=False, bootstrap=True, warm_start=True)
+    rf = RandomForestRegressor(n_estimators=600, oob_score=False, bootstrap=True, warm_start=True)
     rf.fit(X_train, Y_train)
     Y_pred = rf.predict(X_test)
-    return np.sqrt(mean_squared_error(Y_test, Y_pred))
+
+    return mean_squared_error(Y_test, Y_pred)
+
+def test(X_train, X_valid, Y_train, Y_valid):
+    # Number of trees in random forest
+    n_estimators = [int(x) for x in np.linspace(start=200, stop=2000, num=10)]
+    # Number of features to consider at every split
+    max_features = ['auto', 'sqrt']
+    # Maximum number of levels in tree
+    max_depth = [int(x) for x in np.linspace(2, 14, num=7)]
+    max_depth.append(None)
+    # Minimum number of samples required to split a node
+    min_samples_split = [2, 5, 10]
+    # Minimum number of samples required at each leaf node
+    min_samples_leaf = [1, 2, 4]
+    # Method of selecting samples for training each tree
+    bootstrap = [True, False]
+    oob_score = [True, False]
+    # Create the random grid
+    random_grid = {'n_estimators': n_estimators,
+                   'max_features': max_features,
+                   'max_depth': max_depth,
+                   'min_samples_split': min_samples_split,
+                   'min_samples_leaf': min_samples_leaf,
+                   'bootstrap': bootstrap,
+                   'oob_score': oob_score}
+    rf = RandomForestRegressor()
+    rf_random = RandomizedSearchCV(estimator=rf, param_distributions=random_grid, n_iter=100, cv=3, verbose=2,
+                                   random_state=42, n_jobs=-1)
+    # Fit the random search model
+    rf_random.fit(X_train, Y_train)
+
+    print("Best Parameters: ", rf_random.best_params_)
+
+def testWhetherToRound(X_train, X_valid, Y_train, Y_valid):
+    rf = RandomForestRegressor()
+    rf.fit(X_train, Y_train)
+    Y_pred = rf.predict(X_valid)
+
+    print("Error without rounding:", np.sqrt(mean_squared_error(Y_valid, Y_pred)))
+    Y_pred_rounded = [round(item) for item in Y_pred]
+    print("Error with rounding:", np.sqrt(mean_squared_error(Y_valid, Y_pred_rounded)))
 
 def testN_estimatorsparameter(X_train, X_valid, Y_train, Y_valid): #number of trees in the forest
 
     errors = {}
-    for i in range(100):
-        nEst = i + 10
+    for i in range(10):
+        nEst = (i+1)*100
         rf = RandomForestRegressor(n_estimators=nEst)
         rf.fit(X_train, Y_train)
         Y_pred = rf.predict(X_valid)
@@ -90,14 +133,35 @@ def testWarmStartParameter(X_train, X_valid, Y_train, Y_valid):
 
     print("Error with warm start: ", np.sqrt(mean_squared_error(Y_valid, Y_pred)))
 
+def testMinSamplesSplitParameter(X_train, X_valid, Y_train, Y_valid):
+    errors = {}
 
-def plotFeatureImportances(X, Y):
+    for i in range(10):
+        min_samples_split = i + 2
+        rf = RandomForestRegressor(min_samples_split=min_samples_split)
+        rf.fit(X_train, Y_train)
+        Y_pred = rf.predict(X_valid)
+        errors[min_samples_split] = np.sqrt(mean_squared_error(Y_valid, Y_pred))
+
+    print(errors)
+
+def testMinSamplesLeafParameter(X_train, X_valid, Y_train, Y_valid):
+    errors = {}
+
+    for i in range(10):
+        min_samples_leaf = i + 1
+        rf = RandomForestRegressor(min_samples_leaf=min_samples_leaf)
+        rf.fit(X_train, Y_train)
+        Y_pred = rf.predict(X_valid)
+        errors[min_samples_leaf] = np.sqrt(mean_squared_error(Y_valid, Y_pred))
+
+    print(errors)
+
+
+def plotFeatureImportances(X_train, Y_train):
     plt.clf()
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=10)
     rf = RandomForestRegressor()
     rf.fit(X_train, Y_train)
-    Y_pred = rf.predict(X_test)
-
     importances = rf.feature_importances_
     forest_importances = pd.Series(importances, index=feature_names)
 
@@ -142,9 +206,8 @@ random_states = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10]  # for 10 different sp
 errors = []
 
 """for i in range(10):
-    X_train, X_rem, Y_train, Y_rem = train_test_split(X, Y, train_size=0.8, random_state=random_states[i])
-    X_valid, X_test, Y_valid, Y_test = train_test_split(X_rem, Y_rem, test_size=0.5, random_state=random_states[i])
-    rf = RandomForestRegressor()
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=random_states[i])
+    rf = RandomForestRegressor(n_estimators=600, oob_score=False, bootstrap=True, warm_start=True)
     rf.fit(X_train, Y_train)
     Y_pred = rf.predict(X_test)
     errors.append(np.sqrt(mean_squared_error(Y_test, Y_pred)))
@@ -169,13 +232,18 @@ Y_test = pd.read_pickle('Y_test.pkl')
 #testOOBscoreParameter(X_train, X_valid, Y_train,Y_valid)
 #testBootstrapParameter(X_train, X_valid, Y_train,Y_valid)
 #testWarmStartParameter(X_train, X_valid, Y_train,Y_valid)
+#testWhetherToRound(X_train, X_valid, Y_train,Y_valid)
+#testMinSamplesSplitParameter(X_train, X_valid, Y_train,Y_valid)
+#testMinSamplesLeafParameter(X_train, X_valid, Y_train,Y_valid)
 
-print("Training set error:")
-print(getError(X_train, X_train, Y_train, Y_train))
+print("Training set error:", getError(X_train, X_train, Y_train, Y_train))
 
-print("Validation set error:")
-print(getError(X_train, X_valid, Y_train, Y_valid))
+print("Validation set error:", getError(X_train, X_valid, Y_train, Y_valid))
 
-print("Test set error:")
-print(getError(X_train, X_test, Y_train, Y_test))
+print("Test set error:", getError(X_train, X_test, Y_train, Y_test))
+
+#plotFeatureImportances(X_train, Y_train)
+
+#test(X_train, X_valid, Y_train,Y_valid)
+
 
