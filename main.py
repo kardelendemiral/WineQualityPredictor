@@ -9,7 +9,7 @@ import statistics
 from sklearn.metrics import r2_score
 from sklearn.model_selection import RandomizedSearchCV
 
-def splitDataAndSave():
+def splitDataAndSave(): #splits the data into 3 sets: training set, validation set and test set. Then saves this sets to use later
 
     df = pd.read_csv('winequalityN.csv')
 
@@ -30,7 +30,7 @@ def splitDataAndSave():
     X_test.to_pickle('X_test.pkl')
     Y_test.to_pickle('Y_test.pkl')
 
-def getError(X_train, X_test, Y_train, Y_test):
+def getError(X_train, X_test, Y_train, Y_test): #returns the error of a particular split
 
     rf = RandomForestRegressor(n_estimators=600, oob_score=False, bootstrap=True, warm_start=True)
     rf.fit(X_train, Y_train)
@@ -77,6 +77,11 @@ def testWhetherToRound(X_train, X_valid, Y_train, Y_valid):
     print("Error without rounding:", np.sqrt(mean_squared_error(Y_valid, Y_pred)))
     Y_pred_rounded = [round(item) for item in Y_pred]
     print("Error with rounding:", np.sqrt(mean_squared_error(Y_valid, Y_pred_rounded)))
+
+    plt.clf()
+    plt.bar(["Without Rounding", "With Rounding"], [np.sqrt(mean_squared_error(Y_valid, Y_pred)), np.sqrt(mean_squared_error(Y_valid, Y_pred_rounded))], color="pink", width=0.8)
+    plt.ylabel("Errors")
+    plt.show()
 
 def testN_estimatorsparameter(X_train, X_valid, Y_train, Y_valid): #number of trees in the forest
 
@@ -160,7 +165,7 @@ def testMinSamplesLeafParameter(X_train, X_valid, Y_train, Y_valid):
 
 def plotFeatureImportances(X_train, Y_train):
     plt.clf()
-    rf = RandomForestRegressor()
+    rf = RandomForestRegressor(n_estimators=600, oob_score=False, bootstrap=True, warm_start=True)
     rf.fit(X_train, Y_train)
     importances = rf.feature_importances_
     forest_importances = pd.Series(importances, index=feature_names)
@@ -174,6 +179,48 @@ def plotFeatureImportances(X_train, Y_train):
 
     plt.show()
 
+
+def setErrors(X_train, Y_train, X_valid, Y_valid, X_test, Y_test):
+    T_err = getError(X_train, X_train, Y_train, Y_train)
+    V_err = getError(X_train, X_valid, Y_train, Y_valid)
+    Tst_err = getError(X_train, X_test, Y_train, Y_test)
+
+    print("Training set error:", T_err)
+
+    print("Validation set error:", V_err)
+
+    print("Test set error:", Tst_err)
+
+    plt.clf()
+    plt.bar(["Training Set", "Validation Set", "Test Set"], [T_err, V_err, Tst_err], color="purple", width=0.5)
+    plt.xlabel("Sets")
+    plt.ylabel("Errors")
+    plt.show()
+
+
+def tenSplits(X, Y):
+
+    random_states = [90, 100, 700, 66, 50, 409, 30, 20, 110, 5]  # for 10 different splits
+    errors = []
+
+    for i in range(10):
+        X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.1, random_state=random_states[i])
+        errors.append(getError(X_train, X_test, Y_train, Y_test))
+
+    plt.clf()
+    plt.plot(errors)
+    plt.show()
+    print(errors)
+    avg_error = statistics.mean(errors)
+    std_dev = statistics.pstdev(errors)
+    print(avg_error, std_dev)
+
+
+def dropTypeFeature(X_train, Y_train, X_test, Y_test):
+    X_train.drop(X_train.iloc[:, :1], inplace=True, axis=1)
+    X_test.drop(X_test.iloc[:, :1], inplace=True, axis=1)
+
+    print("Error on test set when 'type' feature is eliminated: ", getError(X_train, X_test, Y_train, Y_test))
 
 
 df = pd.read_csv('winequalityN.csv')
@@ -201,23 +248,6 @@ Y = df.iloc[:, -1]
 columns = list(df.columns)
 feature_names = columns[: -1]
 
-
-random_states = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10]  # for 10 different splits
-errors = []
-
-"""for i in range(10):
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, random_state=random_states[i])
-    rf = RandomForestRegressor(n_estimators=600, oob_score=False, bootstrap=True, warm_start=True)
-    rf.fit(X_train, Y_train)
-    Y_pred = rf.predict(X_test)
-    errors.append(np.sqrt(mean_squared_error(Y_test, Y_pred)))
-
-
-print(errors)
-avg_error = statistics.mean(errors)
-std_dev = statistics.pstdev(errors)
-print(avg_error, std_dev)"""
-
 #splitDataAndSave()
 
 X_train = pd.read_pickle('X_train.pkl')
@@ -236,14 +266,14 @@ Y_test = pd.read_pickle('Y_test.pkl')
 #testMinSamplesSplitParameter(X_train, X_valid, Y_train,Y_valid)
 #testMinSamplesLeafParameter(X_train, X_valid, Y_train,Y_valid)
 
-print("Training set error:", getError(X_train, X_train, Y_train, Y_train))
-
-print("Validation set error:", getError(X_train, X_valid, Y_train, Y_valid))
-
-print("Test set error:", getError(X_train, X_test, Y_train, Y_test))
-
 #plotFeatureImportances(X_train, Y_train)
 
 #test(X_train, X_valid, Y_train,Y_valid)
+
+tenSplits(X, Y)
+#setErrors(X_train, Y_train, X_valid, Y_valid, X_test, Y_test)
+
+#dropTypeFeature(X_train, Y_train, X_test, Y_test)
+
 
 
